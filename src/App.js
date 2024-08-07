@@ -23,7 +23,6 @@ const App = () => {
         {
           size: "invisible",
           callback: (response) => {
-            // recaptcha solved - will proceed with signInWithPhoneNumber
             onSignup();
           },
           "expired-callback": () => {
