@@ -100,26 +100,24 @@ const App = () => {
             if (error.response && error.response.status === 409) {
                 const confirm = window.confirm("Session already active on another device. Do you want to terminate it?");
                 if (confirm) {
-                    // Call an endpoint to logout the previous session
                     const userId = error.response.data.userId;
                     await axios.post(`${API_URL}/api/users/logout`, { userId });
 
-                    // Pause for a moment to ensure session termination propagates
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-
-                    // Retry login after terminating previous session
-                    try {
-                        const retryResponse = await axios.post(`${API_URL}/api/users/login`, { phone });
-                        setUser(retryResponse.data);
-                        setPoints(retryResponse.data.points);
-                        setEnergy(retryResponse.data.energy);
-                        localStorage.setItem('userId', retryResponse.data._id);
-                        setShowSignup(false);
-                        setShowLogin(false);
-                    } catch (retryError) {
-                        console.error('Retry login error:', retryError);
-                        toast.error(retryError.response?.data?.message || 'An error occurred during login.');
-                    }
+                    // Ensure the session termination is complete before retrying login
+                    setTimeout(async () => {
+                        try {
+                            const retryResponse = await axios.post(`${API_URL}/api/users/login`, { phone });
+                            setUser(retryResponse.data);
+                            setPoints(retryResponse.data.points);
+                            setEnergy(retryResponse.data.energy);
+                            localStorage.setItem('userId', retryResponse.data._id);
+                            setShowSignup(false);
+                            setShowLogin(false);
+                        } catch (retryError) {
+                            console.error('Retry login error:', retryError);
+                            toast.error(retryError.response?.data?.message || 'An error occurred during login.');
+                        }
+                    }, 1000); // 1 second delay to ensure session termination propagates
                 }
             } else {
                 console.error('Login error:', error);
@@ -127,6 +125,7 @@ const App = () => {
             }
         }
     };
+
 
 
     const handleCreatePoll = async (poll) => {
