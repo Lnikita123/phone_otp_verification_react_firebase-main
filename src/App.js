@@ -1,155 +1,276 @@
-import { BsFillShieldLockFill, BsTelephoneFill } from "react-icons/bs";
-import { CgSpinner } from "react-icons/cg";
-import OtpInput from "otp-input-react";
-import { useState } from "react";
-import PhoneInput from "react-phone-input-2";
-import "react-phone-input-2/lib/style.css";
-import { auth } from "./firebase.config";
-import { RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
-import { toast, Toaster } from "react-hot-toast";
+import React, { useState, useEffect } from 'react';
+import PollCreator from './PollCreator';
+import Poll from './Poll';
+import TapToEarn from './TapToEarn';
+import axios from 'axios';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import './App.css';
+import PhoneLogin from './PhoneLogin';
+
+const API_URL = 'http://localhost:5000';
 
 const App = () => {
-  const [otp, setOtp] = useState("");
-  const [ph, setPh] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [showOTP, setShowOTP] = useState(false);
-  const [user, setUser] = useState(null);
+    const [polls, setPolls] = useState([]);
+    const [user, setUser] = useState(null);
+    const [showSignup, setShowSignup] = useState(true);
+    const [username, setUsername] = useState('');
+    const [phone, setPhone] = useState('');
+    const [avatar, setAvatar] = useState('logo.png');
+    const [points, setPoints] = useState(0);
+    const [energy, setEnergy] = useState(1000);
+    const [showLogin, setShowLogin] = useState(false);
 
-
-  const setupRecaptcha = () => {
-    if (!window.recaptchaVerifier) {
-      window.recaptchaVerifier = new RecaptchaVerifier(
-        "recaptcha-container",
-        {
-          size: "invisible",
-          callback: (response) => {
-            onSignup();
-          },
-          "expired-callback": () => {
-            toast.error("Recaptcha expired, please try again.");
-          },
-        },
-        auth
-      );
-    }
-  };
-
-  const onSignup = () => {
-    setLoading(true);
-    setupRecaptcha();
-
-    const appVerifier = window.recaptchaVerifier;
-    const phoneNumber = "+" + ph;
-
-    signInWithPhoneNumber(auth, phoneNumber, appVerifier)
-      .then((confirmationResult) => {
-        window.confirmationResult = confirmationResult;
-        setLoading(false);
-        setShowOTP(true);
-        toast.success("OTP sent successfully!");
-      })
-      .catch((error) => {
-        console.error("Error during signInWithPhoneNumber:", error);
-        if (error.code === 'auth/too-many-requests') {
-          toast.error("Too many attempts. Please try again later.");
-        } else if (error.code === 'auth/invalid-phone-number') {
-          toast.error("Invalid phone number. Please enter a valid number.");
-        } else if (error.code === 'auth/captcha-check-failed') {
-          toast.error("Captcha check failed. Please refresh the page and try again.");
-        } else {
-          toast.error("Failed to send OTP. Please try again.");
+    useEffect(() => {
+        const savedUserId = localStorage.getItem('userId');
+        if (savedUserId) {
+            axios.get(`${API_URL}/api/users/${savedUserId}`)
+                .then(response => {
+                    setUser(response.data);
+                    setPoints(response.data.points);
+                    setEnergy(response.data.energy);
+                    setShowSignup(false);
+                })
+                .catch(error => {
+                    console.error('Error fetching user:', error);
+                });
         }
-        setLoading(false);
-      });
-  };
 
-  const onOTPVerify = () => {
-    setLoading(true);
-    window.confirmationResult
-      .confirm(otp)
-      .then((result) => {
-        setUser(result.user);
-        setLoading(false);
-      })
-      .catch((error) => {
-        console.error("Error during OTP verification:", error);
-        toast.error("Invalid OTP. Please try again.");
-        setLoading(false);
-      });
-  };
-  //verification
-  return (
-    <section className="flex items-center justify-center h-screen bg-emerald-500">
-      <div>
-        <Toaster toastOptions={{ duration: 4000 }} />
-        <div id="recaptcha-container"></div>
-        {user ? (
-          <h2 className="text-2xl font-medium text-center text-white">
-            👍 Login Success
-          </h2>
-        ) : (
-          <div className="flex flex-col gap-4 p-4 rounded-lg w-80">
-            <h1 className="mb-6 text-3xl font-medium leading-normal text-center text-white">
-              Welcome to <br /> CODE A PROGRAM
-            </h1>
-            {showOTP ? (
-              <>
-                <div className="p-4 mx-auto bg-white rounded-full text-emerald-500 w-fit">
-                  <BsFillShieldLockFill size={30} />
+        const fetchPolls = async () => {
+            try {
+                const response = await axios.get(`${API_URL}/api/poll`);
+                setPolls(response.data);
+            } catch (error) {
+                console.error('Error fetching polls:', error);
+            }
+        };
+
+        fetchPolls();
+    }, []);
+
+    const handleEnergyRegeneration = async () => {
+        if (!user) return;
+
+        try {
+            const response = await axios.post(`${API_URL}/api/users/regenerate-energy`, { userId: user._id });
+            setEnergy(response.data.energy);
+        } catch (error) {
+            console.error('Error regenerating energy:', error);
+        }
+    };
+
+    useEffect(() => {
+        const interval = setInterval(handleEnergyRegeneration, 2000);
+        return () => clearInterval(interval);
+    }, [user]);
+
+    const handleSignup = async () => {
+        if (!/^\d{10}$/.test(phone)) {
+            toast.error('Invalid phone number. Please enter a valid 10-digit phone number.');
+            return;
+        }
+
+        try {
+            const response = await axios.post(`${API_URL}/api/users/signup`, { username, phone, avatar });
+            setUser(response.data);
+            setPoints(response.data.points);
+            setEnergy(response.data.energy);
+            localStorage.setItem('userId', response.data._id);
+            setShowSignup(false);
+        } catch (error) {
+            console.error('Signup error:', error);
+            toast.error(error.response?.data?.message || 'An error occurred during signup.');
+        }
+    };
+
+    const handleLogin = async () => {
+        if (!/^\d{10}$/.test(phone)) {
+            toast.error('Invalid phone number. Please enter a valid 10-digit phone number.');
+            return;
+        }
+
+        try {
+            const response = await axios.post(`${API_URL}/api/users/login`, { phone });
+            setUser(response.data);
+            setPoints(response.data.points);
+            setEnergy(response.data.energy);
+            localStorage.setItem('userId', response.data._id);
+            setShowSignup(false);
+            setShowLogin(false);
+        } catch (error) {
+            if (error.response && error.response.status === 409) {
+                const confirm = window.confirm("Session already active on another device. Do you want to terminate it?");
+                if (confirm) {
+                    // Call an endpoint to logout the previous session
+                    const userId = error.response.data.userId;
+                    await axios.post(`${API_URL}/api/users/logout`, { userId });
+                    // Retry login after terminating previous session
+                    try {
+                        const response = await axios.post(`${API_URL}/api/users/login`, { phone });
+                        setUser(response.data);
+                        setPoints(response.data.points);
+                        setEnergy(response.data.energy);
+                        localStorage.setItem('userId', response.data._id);
+                        setShowSignup(false);
+                        setShowLogin(false);
+                    } catch (retryError) {
+                        console.error('Retry login error:', retryError);
+                        toast.error(retryError.response?.data?.message || 'An error occurred during login.');
+                    }
+                }
+            } else {
+                console.error('Login error:', error);
+                toast.error(error.response?.data?.message || 'An error occurred during login.');
+            }
+        }
+    };
+
+
+    const handleCreatePoll = async (poll) => {
+        if (!user) {
+            toast.error('Please login to create a poll');
+            return;
+        }
+
+        try {
+            const response = await axios.post(`${API_URL}/api/poll`, { ...poll, userId: user._id });
+            setPolls([...polls, response.data.poll]);
+            setPoints(response.data.points);
+            toast.success(`Poll created successfully. 5 points deducted. Your current points: ${response.data.points}`);
+        } catch (error) {
+            console.error('Error creating poll:', error);
+            toast.error('An error occurred while creating the poll.');
+        }
+    };
+
+    const handleVote = async (pollId, option) => {
+        if (!user) {
+            toast.error('Please login to vote');
+            return;
+        }
+
+        const votedPolls = JSON.parse(localStorage.getItem('votedPolls') || '[]');
+        if (votedPolls.includes(pollId)) {
+            toast.error('You have already voted in this poll');
+            return;
+        }
+
+        try {
+            const response = await axios.post(`${API_URL}/api/poll/vote`, {
+                option: option.option,
+                userId: user._id,
+                pollId: pollId,
+            });
+            setPolls(polls.map(p => p._id === response.data.poll._id ? response.data.poll : p));
+            setPoints(response.data.points);
+
+            votedPolls.push(pollId);
+            localStorage.setItem('votedPolls', JSON.stringify(votedPolls));
+
+            toast.success('Vote recorded successfully.');
+        } catch (error) {
+            console.error('Error voting:', error);
+            toast.error(error.response?.data?.error || 'An error occurred while recording your vote.');
+        }
+    };
+
+    const handleTap = () => {
+        if (!user) {
+            toast.error('Please login to earn points');
+            return;
+        }
+
+        axios.post(`${API_URL}/api/users/tap`, { userId: user._id })
+            .then(response => {
+                setUser(response.data);
+                setPoints(response.data.points);
+                setEnergy(response.data.energy);
+            })
+            .catch(error => {
+                if (error.response && error.response.status === 400) {
+                    toast.error('Daily click limit reached for tap to earn');
+                } else {
+                    console.error(error);
+                }
+            });
+    };
+
+    return (
+        <div className="app-container">
+            <ToastContainer position="top-center" />
+            {showSignup && !showLogin && (
+                <div className="signup-container">
+                    <h2>Signup</h2>
+                    <input
+                        type="text"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        placeholder="Username"
+                        required
+                    />
+                    <input
+                        type="text"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        placeholder="Phone Number"
+                        required
+                    />
+                    <select onChange={(e) => setAvatar(e.target.value)} value={avatar}>
+                        <option value="logo.png">Default Avatar</option>
+                        <option value="A1.png">Avatar 1</option>
+                        <option value="A2.png">Avatar 2</option>
+                        <option value="A3.png">Avatar 3</option>
+                        <option value="A4.png">Avatar 4</option>
+                        <option value="A5.png">Avatar 5</option>
+                    </select>
+                    <button onClick={handleSignup}>Signup</button>
+                    <button onClick={() => setShowLogin(true)}>Already have an account? Login</button>
                 </div>
-                <label
-                  htmlFor="otp"
-                  className="text-xl font-bold text-center text-white"
-                >
-                  Enter your OTP
-                </label>
-                <OtpInput
-                  value={otp}
-                  onChange={setOtp}
-                  OTPLength={6}
-                  otpType="number"
-                  disabled={false}
-                  autoFocus
-                  className="opt-container"
-                ></OtpInput>
-                <button
-                  onClick={onOTPVerify}
-                  className="bg-emerald-600 w-full flex gap-1 items-center justify-center py-2.5 text-white rounded"
-                >
-                  {loading && (
-                    <CgSpinner size={20} className="mt-1 animate-spin" />
-                  )}
-                  <span>Verify OTP</span>
-                </button>
-              </>
-            ) : (
-              <>
-                <div className="p-4 mx-auto bg-white rounded-full text-emerald-500 w-fit">
-                  <BsTelephoneFill size={30} />
-                </div>
-                <label
-                  htmlFor=""
-                  className="text-xl font-bold text-center text-white"
-                >
-                  Verify your phone number
-                </label>
-                <PhoneInput country={"in"} value={ph} onChange={setPh} />
-                <button
-                  onClick={onSignup}
-                  className="bg-emerald-600 w-full flex gap-1 items-center justify-center py-2.5 text-white rounded"
-                >
-                  {loading && (
-                    <CgSpinner size={20} className="mt-1 animate-spin" />
-                  )}
-                  <span>Send code via SMS</span>
-                </button>
-              </>
             )}
-          </div>
-        )}
-      </div>
-    </section>
-  );
+            {showLogin && (
+                <div className="login-container">
+                    <h2>Login</h2>
+                    <input
+                        type="text"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        placeholder="Phone Number"
+                        required
+                    />
+                    <button onClick={handleLogin}>Login</button>
+                </div>
+            )}
+            {!showSignup && !showLogin && user && (
+                <>
+                    <div className="welcome-container">
+                        <h1>
+                            <img
+                                src={`/${user.avatar}`}
+                                alt="User Avatar"
+                                className="user-avatar"
+                                style={{ width: '32px', height: '32px', marginRight: '8px' }}
+                            />
+                            Welcome, {user.username}
+                        </h1>
+                    </div>
+                    <div className="poll-creator-container">
+                        <PollCreator onCreatePoll={handleCreatePoll} />
+                    </div>
+                    <div className="polls-container">
+                        <h2>All Polls</h2>
+                        {polls.map(poll => (
+                            <Poll key={poll._id} poll={poll} onVote={handleVote} userId={user._id} />
+                        ))}
+                    </div>
+                    <div className="stats-container">
+                        <h2>Your Points: {points}</h2>
+                        <h2>Your Energy: {energy} / 1000</h2>
+                        <TapToEarn onTap={handleTap} clicksToday={user.tapClicksToday} />
+                    </div>
+                </>
+            )}
+        </div>
+    );
 };
 
 export default App;
