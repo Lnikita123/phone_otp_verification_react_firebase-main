@@ -8,7 +8,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
 import PhoneLogin from './PhoneLogin';
 
-const API_URL = 'http://localhost:5000';
+const API_URL = 'https://phonewallete.vercel.app';
 
 const App = () => {
     const [polls, setPolls] = useState([]);
