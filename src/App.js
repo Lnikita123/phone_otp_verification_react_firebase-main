@@ -103,13 +103,17 @@ const App = () => {
                     // Call an endpoint to logout the previous session
                     const userId = error.response.data.userId;
                     await axios.post(`${API_URL}/api/users/logout`, { userId });
+
+                    // Pause for a moment to ensure session termination propagates
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+
                     // Retry login after terminating previous session
                     try {
-                        const response = await axios.post(`${API_URL}/api/users/login`, { phone });
-                        setUser(response.data);
-                        setPoints(response.data.points);
-                        setEnergy(response.data.energy);
-                        localStorage.setItem('userId', response.data._id);
+                        const retryResponse = await axios.post(`${API_URL}/api/users/login`, { phone });
+                        setUser(retryResponse.data);
+                        setPoints(retryResponse.data.points);
+                        setEnergy(retryResponse.data.energy);
+                        localStorage.setItem('userId', retryResponse.data._id);
                         setShowSignup(false);
                         setShowLogin(false);
                     } catch (retryError) {
